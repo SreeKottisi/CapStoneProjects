@@ -1,55 +1,9 @@
-resource "aws_key_pair" "capstone1-key" {
-  key_name   = "capstone1-key"
-  public_key = file(var.PUB_KEY)
-}
-
 /*Internet Gateway: a network device that allows traffic to flow between your VPC and the internet. 
 It is a fundamental component of any VPC network.*/
 resource "aws_internet_gateway" "capstone1-internet-gateway" {
   vpc_id = aws_vpc.capstone1-vpc.id
   tags = {
     Name = "capstone1-internet-gateway"
-  }
-}
-
-#Creating 4Subnets, 2Private, 2public
-/*The public subnet will have a public IP address assigned to each instance that is launched in it, while 
-the private subnet will not. This allows you to control which instances are accessible from the 
-internet and which are not.*/
-
-#2Public Subnets
-resource "aws_subnet" "capstone1-public-subnet" {
-  count                   = 2
-  vpc_id                  = aws_vpc.capstone1-vpc.id
-  cidr_block              = var.capstone1-public-subnet-cidr[count.index]
-  map_public_ip_on_launch = true
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  tags = {
-    Name = join("-", ["${var.environment}-capstone1-public-subnet", data.aws_availability_zones.available.names[count.index]])
-  }
-}
-#2Private Subnets
-resource "aws_subnet" "capstone1-private-subnet" {
-  count             = 2
-  vpc_id            = aws_vpc.capstone1-vpc.id
-  cidr_block        = var.capstone1-private-subnet-cidr[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags = {
-    Name = join("-", ["${var.environment}-capstone1-private-subnet", data.aws_availability_zones.available.names[count.index]])
-  }
-}
-
-
-/*Route table for public subnets, this ensures that all instances launched in 
-public subnet will have access to the internet*/
-resource "aws_route_table" "capstone1-public-route-table" {
-  vpc_id = aws_vpc.capstone1-vpc.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.capstone1-internet-gateway.id
-  }
-  tags = {
-    Name = "${var.environment}-capstone1-public-route-table"
   }
 }
 
@@ -189,14 +143,27 @@ resource "aws_instance" "capstone1-ops-server" {
   ami                    = var.ami
   instance_type          = var.instance_type
   key_name               = aws_key_pair.capstone1-key.key_name
-  subnet_id     = aws_subnet.capstone1-public-subnet[0].id
-  vpc_security_group_ids = [aws_security_group.capstone1-asg-security-group.id]
+  subnet_id              = aws_subnet.capstone1-public-subnet[0].id
+  vpc_security_group_ids = [aws_security_group.capstone1-alb-security-group.id]
   tags = {
-    Name    = "capstone1-ops-server"
+    Name = "capstone1-ops-server"
   }
+  provisioner "file" {
+    source      = "capstone1-key1"
+    destination = "/tmp/capstone1-key1"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod 600 /tmp/capstone1-key1",
+      #"sudo /tmp/web.sh"
+      "echo key file copied"
+    ]
+  }
+
   connection {
     user        = var.USER
-    private_key = file("capstone-project1-key")
+    private_key = file("capstone1-key1")
     host        = self.public_ip
   }
 }

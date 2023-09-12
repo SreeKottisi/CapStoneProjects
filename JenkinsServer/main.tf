@@ -149,13 +149,13 @@ resource "aws_instance" "capstone1-ops-server" {
     Name = "capstone1-ops-server"
   }
   provisioner "file" {
-    source      = "capstone1-key1"
-    destination = "/tmp/capstone1-key1"
+    source      = "capstone1-key"
+    destination = "/tmp/capstone1-key"
   }
 
   provisioner "remote-exec" {
     inline = [
-      "chmod 600 /tmp/capstone1-key1",
+      "chmod 600 /tmp/capstone1-key",
       #"sudo /tmp/web.sh"
       "echo key file copied"
     ]
@@ -163,7 +163,7 @@ resource "aws_instance" "capstone1-ops-server" {
 
   connection {
     user        = var.USER
-    private_key = file("capstone1-key1")
+    private_key = file("capstone1-key")
     host        = self.public_ip
   }
 }

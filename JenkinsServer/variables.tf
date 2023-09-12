@@ -31,11 +31,11 @@ variable "instance_type" {
 }
 
 variable "PUB_KEY" {
-  default = "capstone1-key1.pub"
+  default = "capstone1-key.pub"
 }
 
 variable "PRIV_KEY" {
-  default = "capstone1-key1"
+  default = "capstone1-key"
 }
 
 variable "USER" {
@@ -87,11 +87,13 @@ variable "ec2_user_data" {
   # Mount EFS to /var/lib/jenkins
   sudo yum install -y amazon-efs-utils
   
-
+  
 
   # Create a data directory for Jenkins
   sudo mkdir -p /var/lib/jenkins/data
   sudo chown -R jenkins:jenkins /var/lib/jenkins/data
+  #update the  fs id from step1
+  sudo mount -t efs -o tls fs-045759ea362791ce7:/ /var/lib/jenkins/data
 
 # install jenkins server
   sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo

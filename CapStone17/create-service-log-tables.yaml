@@ -1,0 +1,573 @@
+Parameters:
+  S3AccessLogsPathParameter:
+    Description: Enter the bucket path for your S3 Access Logs
+    Type: String
+    Default: '<S3AccessLog_BUCKET_NAME>/'
+  CloudTrailPathParameter:
+    Description: Enter the bucket path for your CloudTrail Logs
+    Type: String
+    Default: '<CloudTrail_BUCKET_NAME>/<PREFIX>/AWSLogs/<ACCOUNT-ID>/CloudTrail/'
+  VPCFlowLogPathParameter:
+    Description: Enter the bucket path for your VPC Flow Logs
+    Type: String
+    Default: '<VPC_BUCKET_NAME>/<PREFIX>/AWSLogs/'
+  AWSWAFLogPathParameter:
+    Description: Enter the bucket path for your AWS WAF Logs
+    Type: String
+    Default: '<WAF_BUCKET_NAME>/WebACL/'
+  CloudFrontLogPathParameter:
+    Description: Enter the bucket path for your CloudFront Logs
+    Type: String
+    Default: '<CloudFront_BUCKET_NAME>/CloudFront/'
+  ALBLogPathParameter:
+    Description: Enter the bucket path for your Application Load Balancer Logs. Delete Prefix if you don't have one.
+    Type: String
+    Default: '<ALB_BUCKET_NAME>/<PREFIX>/AWSLogs/<ACCOUNT-ID>/elasticloadbalancing/<REGION>/'
+Resources:
+  WAFLogsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates WAF Logs Table
+      Name: Create Table - WAF Logs
+      QueryString: !Sub
+        |-
+          CREATE EXTERNAL TABLE waf_logs(
+          timestamp bigint,
+          formatversion int,
+          webaclid string,
+          terminatingruleid string,
+          terminatingruletype string,
+          action string,
+          terminatingrulematchdetails array<
+                                          struct<
+                                            conditiontype:string,
+                                            location:string,
+                                            matcheddata:array<string>
+                                                >
+                                            >,
+          httpsourcename string,
+          httpsourceid string,
+          rulegrouplist array<string>,
+          ratebasedrulelist array<
+                                struct<
+                                  ratebasedruleid:string,
+                                  limitkey:string,
+                                  maxrateallowed:int
+                                      >
+                                  >,
+          nonterminatingmatchingrules array<
+                                          struct<
+                                            ruleid:string,
+                                            action:string
+                                                >
+                                            >,
+          httprequest struct<
+                              clientip:string,
+                              country:string,
+                              headers:array<
+                                        struct<
+                                          name:string,
+                                          value:string
+                                              >
+                                          >,
+                              uri:string,
+                              args:string,
+                              httpversion:string,
+                              httpmethod:string,
+                              requestid:string
+                              > 
+          )
+          ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+          WITH SERDEPROPERTIES (
+          'paths'='action,formatVersion,httpRequest,httpSourceId,httpSourceName,nonTerminatingMatchingRules,rateBasedRuleList,ruleGroupList,terminatingRuleId,terminatingRuleMatchDetails,terminatingRuleType,timestamp,webaclId')
+          STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat'
+          OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+          LOCATION 's3://${AWSWAFLogPathParameter}'
+  ALBLogsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates S3 Application Load Balancer Table
+      Name: Create Table - ALB Logs
+      QueryString: !Sub
+        |-
+          CREATE EXTERNAL TABLE IF NOT EXISTS alb_logs (
+            type string,
+            time string,
+            elb string,
+            client_ip string,
+            client_port int,
+            target_ip string,
+            target_port int,
+            request_processing_time double,
+            target_processing_time double,
+            response_processing_time double,
+            elb_status_code string,
+            target_status_code string,
+            received_bytes bigint,
+            sent_bytes bigint,
+            request_verb string,
+            request_url string,
+            request_proto string,
+            user_agent string,
+            ssl_cipher string,
+            ssl_protocol string,
+            target_group_arn string,
+            trace_id string,
+            domain_name string,
+            chosen_cert_arn string,
+            matched_rule_priority string,
+            request_creation_time string,
+            actions_executed string,
+            redirect_url string,
+            lambda_error_reason string,
+            target_port_list string,
+            target_status_code_list string,
+            classification string,
+            classification_reason string
+            )
+            ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
+            WITH SERDEPROPERTIES (
+            'serialization.format' = '1',
+            'input.regex' = 
+          '([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*):([0-9]*) ([^ ]*)[:-]([0-9]*) ([-.0-9]*) ([-.0-9]*) ([-.0-9]*) (|[-0-9]*) (-|[-0-9]*) ([-0-9]*) ([-0-9]*) \"([^ ]*) ([^ ]*) (- |[^ ]*)\" \"([^\"]*)\" ([A-Z0-9-]+) ([A-Za-z0-9.-]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" \"([^\"]*)\" ([-.0-9]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" \"([^ ]*)\" \"([^\s]+?)\" \"([^\s]+)\" \"([^ ]*)\" \"([^ ]*)\"')
+            LOCATION 's3://${ALBLogPathParameter}';
+  CloudFrontLogsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates CloudFront Logs Table
+      Name: Create Table - CloudFront Logs
+      QueryString: !Sub
+        |-
+          CREATE EXTERNAL TABLE IF NOT EXISTS default.cloudfront_logs (
+          `date` DATE,
+          time STRING,
+          location STRING,
+          bytes BIGINT,
+          request_ip STRING,
+          method STRING,
+          host STRING,
+          uri STRING,
+          status INT,
+          referrer STRING,
+          user_agent STRING,
+          query_string STRING,
+          cookie STRING,
+          result_type STRING,
+          request_id STRING,
+          host_header STRING,
+          request_protocol STRING,
+          request_bytes BIGINT,
+          time_taken FLOAT,
+          xforwarded_for STRING,
+          ssl_protocol STRING,
+          ssl_cipher STRING,
+          response_result_type STRING,
+          http_version STRING,
+          fle_status STRING,
+          fle_encrypted_fields INT,
+          c_port INT,
+          time_to_first_byte FLOAT,
+          x_edge_detailed_result_type STRING,
+          sc_content_type STRING,
+          sc_content_len BIGINT,
+          sc_range_start BIGINT,
+          sc_range_end BIGINT
+          )
+          ROW FORMAT DELIMITED 
+          FIELDS TERMINATED BY '\t'
+          LOCATION 's3://${CloudFrontLogPathParameter}'
+          TBLPROPERTIES ( 'skip.header.line.count'='2' )
+  S3AccessLogsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates S3 Access Log Table
+      Name: Create Table - S3 Access Logs
+      QueryString: !Sub
+        |-
+          CREATE EXTERNAL TABLE IF NOT EXISTS s3_access_logs(
+                BucketOwner STRING,
+                Bucket STRING,
+                RequestDateTime STRING,
+                RemoteIP STRING,
+                Requester STRING,
+                RequestID STRING,
+                Operation STRING,
+                Key STRING,
+                RequestURI_operation STRING,
+                RequestURI_key STRING,
+                RequestURI_httpProtoversion STRING,
+                HTTPstatus STRING,
+                ErrorCode STRING,
+                BytesSent BIGINT,
+                ObjectSize BIGINT,
+                TotalTime STRING,
+                TurnAroundTime STRING,
+                Referrer STRING,
+                UserAgent STRING,
+                VersionId STRING,
+                HostId STRING,
+                SigV STRING,
+                CipherSuite STRING,
+                AuthType STRING,
+                EndPoint STRING,
+                TLSVersion STRING
+                ) 
+                ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
+                WITH SERDEPROPERTIES (
+                  'serialization.format' = '1', 'input.regex' = '([^ ]*) ([^ ]*) \\[(.*?)\\] ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) \\\"([^ ]*) ([^ ]*) (- |[^ ]*)\\\" (-|[0-9]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) (\"[^\"]*\") ([^ ]*)(?: ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*))?.*$' )
+                LOCATION 's3://${S3AccessLogsPathParameter}'
+  CloudTrailLogsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates CloudTrail Logs Table
+      Name: Create Table - CloudTrail Logs
+      QueryString: !Sub 
+        |-
+          CREATE EXTERNAL TABLE IF NOT EXISTS cloudtrail_logs (
+                eventversion STRING,
+                useridentity STRUCT<
+                               type:STRING,
+                               principalid:STRING,
+                               arn:STRING,
+                               accountid:STRING,
+                               invokedby:STRING,
+                               accesskeyid:STRING,
+                               userName:STRING,
+                sessioncontext:STRUCT<
+                attributes:STRUCT<
+                               mfaauthenticated:STRING,
+                               creationdate:STRING>,
+                sessionissuer:STRUCT<  
+                               type:STRING,
+                               principalId:STRING,
+                               arn:STRING, 
+                               accountId:STRING,
+                               userName:STRING>>>,
+                eventtime STRING,
+                eventsource STRING,
+                eventname STRING,
+                awsregion STRING,
+                sourceipaddress STRING,
+                useragent STRING,
+                errorcode STRING,
+                errormessage STRING,
+                requestparameters STRING,
+                responseelements STRING,
+                additionaleventdata STRING,
+                requestid STRING,
+                eventid STRING,
+                resources ARRAY<STRUCT<
+                               ARN:STRING,
+                               accountId:STRING,
+                               type:STRING>>,
+                eventtype STRING,
+                apiversion STRING,
+                readonly STRING,
+                recipientaccountid STRING,
+                serviceeventdetails STRING,
+                sharedeventid STRING,
+                vpcendpointid STRING
+                )
+                PARTITIONED BY (region string, year string, month string, day string)
+                ROW FORMAT SERDE 'com.amazon.emr.hive.serde.CloudTrailSerde'
+                STORED AS INPUTFORMAT 'com.amazon.emr.cloudtrail.CloudTrailInputFormat'
+                OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+                LOCATION 's3://${CloudTrailPathParameter}'
+  CloudTrailPartition:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates CloudTrail Partitions
+      Name: Create Partition - CloudTrail
+      QueryString: !Sub
+        |-
+          ALTER TABLE cloudtrail_logs ADD 
+              PARTITION (region='us-east-1',
+                         year='2020',
+                         month='11',
+                         day='23')
+              LOCATION 's3://${CloudTrailPathParameter}us-east-1/2020/11/23/'
+  VPCFlowLogsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates VPC Flow Logs Table
+      Name: Create Table - VPC Flow Logs
+      QueryString: !Sub
+        |-
+          CREATE EXTERNAL TABLE IF NOT EXISTS vpc_flow_logs (
+            version int,
+            account string,
+            interfaceid string,
+            sourceaddress string,
+            destinationaddress string,
+            sourceport int,
+            destinationport int,
+            protocol int,
+            numpackets int,
+            numbytes bigint,
+            starttime int,
+            endtime int,
+            action string,
+            logstatus string
+          )
+          PARTITIONED BY (`date` date)
+          ROW FORMAT DELIMITED
+          FIELDS TERMINATED BY ' '
+          LOCATION 's3://${VPCFlowLogPathParameter}'
+          TBLPROPERTIES ("skip.header.line.count"="1")
+  VPCFlowLogsPartition:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Creates VPC Flow Logs Partitions
+      Name: Create Partition - VPC Flow Logs
+      QueryString: !Sub
+        |-
+          ALTER TABLE vpc_flow_logs
+            ADD PARTITION (`date`='2020-09-28')
+            location 's3://${VPCFlowLogPathParameter}'
+  VPCFlowLogsQueries:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Example Queries for VPC Flow Logs
+      Name: Query - VPC Flow Logs
+      QueryString: |-
+
+          -- The following example query lists a maximum of 100 flow logs for the date specified.
+
+          SELECT * 
+          FROM vpc_flow_logs 
+          WHERE date = DATE('2020-05-04') 
+          LIMIT 100;
+
+          -- The following query lists all of the rejected TCP connections and uses the newly created date partition column, date, to extract from it the day of the week for which these events occurred.
+
+          SELECT day_of_week(date) AS
+            day,
+            date,
+            interfaceid,
+            sourceaddress,
+            action,
+            protocol
+          FROM vpc_flow_logs
+          WHERE action = 'REJECT' AND protocol = 6
+          LIMIT 100;
+
+          -- To see which one of your servers is receiving the highest number of HTTPS requests, use this query. It counts the number of packets received on HTTPS port 443, groups them by destination IP address, and returns the top 10 from the last week.
+
+          SELECT SUM(numpackets) AS
+            packetcount,
+            destinationaddress
+          FROM vpc_flow_logs
+          WHERE destinationport = 443 AND date > current_date - interval '7' day
+          GROUP BY destinationaddress
+          ORDER BY packetcount DESC
+          LIMIT 10;
+  CloudTrailLogsQueries:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Example Queries for CloudTrail Logs
+      Name: Query - CloudTrail Logs
+      QueryString: |-
+          -- The following example shows a portion of a query that returns all anonymous (unsigned) requests from the table created on top of CloudTrail event logs. This query selects those requests where useridentity.accountid is anonymous, and useridentity.arn is not specified:
+
+          SELECT *
+          FROM cloudtrail_logs
+          WHERE 
+              eventsource = 's3.amazonaws.com' AND 
+              eventname in ('GetObject') AND 
+              useridentity.accountid LIKE '%ANONYMOUS%' AND 
+              useridentity.arn IS NULL AND
+              requestparameters LIKE '%$[ your bucket name ]%';
+
+          -- Example for base query template
+
+          SELECT
+            useridentity.arn,
+            eventname,
+            sourceipaddress,
+            eventtime
+          FROM cloudtrail_logs
+          WHERE region='us-east-1' AND year='2020' AND month='11' AND day='24'
+          LIMIT 100;
+  S3AccessLogsQueries:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Example Queries for S3 Access Logs
+      Name: Query - S3 Access Logs
+      QueryString: |-
+
+          -- Example — Get Latest logs
+
+          SELECT * 
+          FROM s3_access_logs
+          ORDER BY parse_datetime(RequestDateTime,'dd/MM/yyyy:HH:mm:ss Z') DESC
+          LIMIT 1000;
+
+          -- Example — show who deleted an object and when (timestamp, IP address, and IAM user)
+
+          SELECT RequestDateTime, RemoteIP, Requester, Key 
+          FROM s3_access_logs
+          WHERE key = 'images/picture.jpg' AND operation like '%DELETE%';
+
+          -- Example — show all operations executed by an IAM user
+
+          SELECT * 
+          FROM s3_access_logs
+          WHERE requester='arn:aws:iam::123456789123:user/user_name';
+
+          -- Example — show all operations that were performed on an object in a specific time period
+
+          SELECT *
+          FROM s3_access_logs
+          WHERE Key='prefix/images/picture.jpg' 
+              AND parse_datetime(RequestDateTime,'dd/MM/yyyy:HH:mm:ss Z')
+              BETWEEN parse_datetime('2017-02-18:07:00:00','yyyy-MM-dd:HH:mm:ss')
+              AND parse_datetime('2017-02-18:08:00:00','yyyy-MM-dd:HH:mm:ss');
+
+          -- Example — show how much data was transferred by a specific IP address in a specific time period
+
+          SELECT SUM(bytessent) AS uploadTotal,
+                SUM(objectsize) AS downloadTotal,
+                SUM(bytessent + objectsize) AS Total
+          FROM s3_access_logs
+          WHERE RemoteIP='1.2.3.4'
+          AND parse_datetime(RequestDateTime,'dd/MM/yyyy:HH:mm:ss Z')
+          BETWEEN parse_datetime('2017-06-01','yyyy-MM-dd')
+          AND parse_datetime('2017-07-01','yyyy-MM-dd');
+  ALBLogsQueries:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Example Queries for Application Load Balancer (ALB) Logs
+      Name: Query - ALB Logs
+      QueryString: |-
+          -- The following query counts the number of HTTP GET requests received by the load balancer grouped by the client IP address:
+
+          SELECT COUNT(request_verb) AS
+            count,
+            request_verb,
+            client_ip
+            FROM alb_logs
+            GROUP BY request_verb, client_ip
+            LIMIT 100;
+
+          -- Another query shows the URLs visited by Safari browser users:
+
+          SELECT request_url
+            FROM alb_logs
+            WHERE user_agent LIKE '%Safari%'
+            LIMIT 10;
+          
+          -- The following example shows how to parse the logs by datetime:
+
+          SELECT client_ip, sum(received_bytes) 
+          FROM alb_logs
+          WHERE parse_datetime(time,'yyyy-MM-dd''T''HH:mm:ss.SSSSSS''Z') 
+              BETWEEN parse_datetime('2018-05-30-12:00:00','yyyy-MM-dd-HH:mm:ss') 
+              AND parse_datetime('2018-05-31-00:00:00','yyyy-MM-dd-HH:mm:ss') 
+          GROUP BY client_ip;
+  WAFLogsQueries:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Example Queries for Web Application Firewall (WAF) Logs
+      Name: Query - WAF Logs
+      QueryString: |-
+          -- The following query counts the number of times an IP address has been blocked by the RATE_BASED terminating rule.
+
+          SELECT COUNT(httpRequest.clientIp) as count,
+            httpRequest.clientIp
+            FROM waf_logs
+            WHERE terminatingruletype='RATE_BASED' AND action='BLOCK'
+            GROUP BY httpRequest.clientIp
+            ORDER BY count 
+            LIMIT 100;
+
+          -- The following query counts the number of times the request has arrived from an IP address that belongs to Ireland (IE) and has been blocked by the RATE_BASED terminating rule.
+
+          SELECT COUNT(httpRequest.country) as count,
+            httpRequest.country
+            FROM waf_logs
+            WHERE 
+              terminatingruletype='RATE_BASED' AND 
+              httpRequest.country='IE'
+            GROUP BY httpRequest.country
+            ORDER BY count
+            LIMIT 100;
+          
+          -- The following query counts the number of times the request has been blocked, with results grouped by WebACL, RuleId, ClientIP, and HTTP Request URI.
+
+          SELECT COUNT(*) AS
+            count,
+            webaclid,
+            terminatingruleid,
+            httprequest.clientip,
+            httprequest.uri
+            FROM waf_logs
+            WHERE action='BLOCK'
+            GROUP BY webaclid, terminatingruleid, httprequest.clientip, httprequest.uri
+            ORDER BY count DESC
+            LIMIT 100;
+
+            -- The following query counts the number of times a specific terminating rule ID has been matched (WHERE terminatingruleid='e9dd190d-7a43-4c06-bcea-409613d9506e'). The query then groups the results by WebACL, Action, ClientIP, and HTTP Request URI.
+            
+            SELECT COUNT(*) AS
+              count,
+              webaclid,
+              action,
+              httprequest.clientip,
+              httprequest.uri
+              FROM waf_logs
+              WHERE terminatingruleid='e9dd190d-7a43-4c06-bcea-409613d9506e'
+              GROUP BY webaclid, action, httprequest.clientip, httprequest.uri
+              ORDER BY count DESC
+              LIMIT 100;
+
+            -- The following query uses the from_unixtime and to_iso8601 functions to return the timestamp field in human-readable ISO 8601 format (for example, 2019-12-13T23:40:12.000Z instead of 1576280412771). The query also returns the HTTP source name, source ID, and request.
+
+            SELECT to_iso8601(from_unixtime(timestamp / 1000)) as time_ISO_8601,
+              httpsourcename,
+              httpsourceid,
+              httprequest
+            FROM waf_logs
+            LIMIT 10;
+
+            -- The following query uses a filter in the WHERE clause to return the same fields for records from the last 24 hours.
+
+            SELECT to_iso8601(from_unixtime(timestamp/1000)) AS time_ISO_8601, 
+              httpsourcename, 
+              httpsourceid, 
+              httprequest 
+            FROM waf_logs
+            WHERE from_unixtime(timestamp/1000) > now() - interval '1' day
+            LIMIT 10;
+  CloudFrontLogsQueries:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: default
+      Description: Example Queries for CloudFront Logs
+      Name: Query - CloudFront Logs
+      QueryString: |-
+          -- The following query adds up the number of bytes served by CloudFront between June 9 and June 11, 2018. Surround the date column name with double quotes because it is a reserved word.
+
+          SELECT SUM(bytes) AS total_bytes
+          FROM cloudfront_logs
+          WHERE "date" BETWEEN DATE '2018-06-09' AND DATE '2018-06-11'
+          LIMIT 100;
+
+          -- To eliminate duplicate rows (for example, duplicate empty rows) from the query results, you can use the SELECT DISTINCT statement, as in the following example.
+
+          SELECT DISTINCT * 
+          FROM cloudfront_logs 
+          LIMIT 10;
+ 
